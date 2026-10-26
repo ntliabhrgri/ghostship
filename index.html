@@ -21,7 +21,7 @@
 <body>
 
 <script>
-// game setup vars
+
 let mobX, mobY;
 let currentMob = 'ghost';
 let points = 0;
@@ -30,13 +30,13 @@ let gameStart = 0;
 let mode = 'start'; 
 let waitFrames = 60; 
 
-// arrays for background and FX
+
 const mobList = ['ghost', 'pumpkin', 'witch', 'monster', 'zombie'];
 let bgDots = [];
 let cloudList = [];
 let fxList = [];
 
-// audio context for retro click sound
+
 let myAudio;
 
 function audioSetup() {
@@ -72,7 +72,7 @@ function setup() {
   createCanvas(480, 360);
   relocateMob();
 
-  // add background dots
+  
   for (let i = 0; i < 45; i++) {
     bgDots.push({
       x: random(width),
@@ -81,7 +81,7 @@ function setup() {
     });
   }
 
-  // add background clouds
+  
   for (let i = 0; i < 4; i++) {
     cloudList.push({
       x: random(width),
@@ -119,14 +119,14 @@ function addBurst(x, y) {
 function draw() {
   background(0);
 
-  // render stars
+  
   fill(255);
   noStroke();
   for (let d of bgDots) {
     ellipse(d.x, d.y, d.sz, d.sz);
   }
 
-  // render clouds
+  
   fill(220, 220, 220, 180);
   for (let c of cloudList) {
     c.x += c.spd;
@@ -135,7 +135,7 @@ function draw() {
     rect(c.x + 10, c.y - 8, 40, 10);
   }
 
-  // start menu
+  
   if (mode === 'start') {
     textAlign(CENTER, CENTER);
     fill(255);
@@ -147,7 +147,7 @@ function draw() {
     return;
   }
 
-  // game over screen
+  
   if (mode === 'over') {
     textAlign(CENTER, CENTER);
     fill(255);
@@ -160,7 +160,7 @@ function draw() {
     return;
   }
 
-  // gameplay loop
+  
   let passed = (millis() - gameStart) / 1000;
   let remaining = max(0, totalTime - passed);
 
@@ -169,7 +169,7 @@ function draw() {
     return;
   }
 
-  // teleport timer check
+  
   if (frameCount % max(1, floor(waitFrames)) === 0) {
     relocateMob();
   }
@@ -177,7 +177,7 @@ function draw() {
   drawMob(mobX, mobY, currentMob);
   drawParticles();
 
-  // render HUD
+  
   fill(255);
   textSize(16);
   textAlign(LEFT, TOP);
