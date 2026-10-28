@@ -1,246 +1,296 @@
 <html>
 <head>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minecraft Teleport Game</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
+    body {
       margin: 0;
       padding: 0;
-    }
-
-    body {
-      background-color: #0f0f11;
+      background: #000;
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      font-family: 'Courier New', Courier, monospace;
+      font-family: sans-serif;
     }
-
     canvas {
-      border: 3px solid #333;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      border: 2px solid #222;
     }
   </style>
 </head>
 <body>
 
 <script>
-  const GAME_DURATION = 180;
-  const MOBS = ['ghost', 'pumpkin', 'witch', 'monster', 'zombie'];
-  
-  let score = 0;
-  let timeRemaining = GAME_DURATION;
-  let gameState = 'START';
-  
-  let currentMob = 'ghost';
-  let mobPos = { x: 0, y: 0 };
-  let mobRadius = 24;
-  
-  let lastSpawnTime = 0;
-  let mobInterval = 1000;
-  
-  let popSound;
-  let particles = [];
-  let stars = [];
+let mobX, mobY;
+let currentMob = 'ghost';
+let points = 0;
+let totalTime = 180;
+let gameStart = 0;
+let mode = 'start'; 
+let waitFrames = 60; 
 
-  function preload() {
-    soundFormats('mp3', 'wav');
-    popSound = loadSound('assets/pop.mp3');
+const mobList = ['ghost', 'pumpkin', 'witch', 'monster', 'zombie'];
+let bgDots = [];
+let cloudList = [];
+let fxList = [];
+
+let sndCtx;
+
+function initAudio() {
+  if (!sndCtx) {
+    sndCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playBeep() {
+  if (!sndCtx) return;
+  if (sndCtx.state === 'suspended') {
+    sndCtx.resume();
   }
 
-  function setup() {
-    createCanvas(480, 360);
-    ellipseMode(CENTER);
-    rectMode(CENTER);
+  let osc = sndCtx.createOscillator();
+  let vol = sndCtx.createGain();
 
-    for (let i = 0; i < 40; i++) {
-      stars.push({
-        x: random(width),
-        y: random(height),
-        size: random(1, 3)
-      });
-    }
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(350, sndCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(750, sndCtx.currentTime + 0.08);
 
-    spawnMob();
+  vol.gain.setValueAtTime(0.15, sndCtx.currentTime);
+  vol.gain.exponentialRampToValueAtTime(0.01, sndCtx.currentTime + 0.08);
+
+  osc.connect(vol);
+  vol.connect(sndCtx.destination);
+
+  osc.start();
+  osc.stop(sndCtx.currentTime + 0.08);
+}
+
+// play hit sound on mob click
+function playHitSound() {
+  if (!sndCtx) return;
+  if (sndCtx.state === 'suspended') {
+    sndCtx.resume();
   }
 
-  function draw() {
-    background(15, 15, 25);
-    drawStarfield();
+  let osc = sndCtx.createOscillator();
+  let vol = sndCtx.createGain();
 
-    switch (gameState) {
-      case 'START':
-        drawStartScreen();
-        break;
-      case 'PLAYING':
-        updateGame();
-        drawGameScreen();
-        break;
-      case 'GAMEOVER':
-        drawGameOverScreen();
-        break;
-    }
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(180, sndCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(40, sndCtx.currentTime + 0.12);
+
+  vol.gain.setValueAtTime(0.25, sndCtx.currentTime);
+  vol.gain.exponentialRampToValueAtTime(0.01, sndCtx.currentTime + 0.12);
+
+  osc.connect(vol);
+  vol.connect(sndCtx.destination);
+
+  osc.start();
+  osc.stop(sndCtx.currentTime + 0.12);
+}
+
+function setup() {
+  createCanvas(480, 360);
+  relocateMob();
+
+  for (let i = 0; i < 45; i++) {
+    bgDots.push({
+      x: random(width),
+      y: random(height),
+      sz: random(1, 3)
+    });
   }
 
-  function updateGame() {
-    timeRemaining = GAME_DURATION - floor((millis() - lastSpawnTime) / 1000);
+  for (let i = 0; i < 4; i++) {
+    cloudList.push({
+      x: random(width),
+      y: random(15, 90),
+      spd: random(0.2, 0.4)
+    });
+  }
+}
 
-    if (timeRemaining <= 0) {
-      gameState = 'GAMEOVER';
-      return;
-    }
+function relocateMob() {
+  mobX = random(40, width - 40);
+  mobY = random(40, height - 40);
+}
 
-    if (millis() - lastSpawnTime > mobInterval) {
-      spawnMob();
-    }
+function pickNewMob() {
+  let filtered = mobList.filter(m => m !== currentMob);
+  currentMob = random(filtered);
+}
 
-    for (let i = particles.length - 1; i >= 0; i--) {
-      let p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.alpha -= 8;
+function addBurst(x, y) {
+  for (let i = 0; i < 20; i++) {
+    let a = random(TWO_PI);
+    let s = random(2, 5);
+    fxList.push({
+      x: x,
+      y: y,
+      vx: cos(a) * s,
+      vy: sin(a) * s,
+      sz: random(4, 7),
+      a: 255
+    });
+  }
+}
 
-      if (p.alpha <= 0) {
-        particles.splice(i, 1);
-      }
-    }
+function draw() {
+  background(0);
+
+  fill(255);
+  noStroke();
+  for (let d of bgDots) {
+    ellipse(d.x, d.y, d.sz, d.sz);
   }
 
-  function spawnMob() {
-    let options = MOBS.filter(m => m !== currentMob);
-    currentMob = random(options);
-
-    mobPos.x = random(40, width - 40);
-    mobPos.y = random(40, height - 40);
-    
-    lastSpawnTime = millis();
+  fill(220, 220, 220, 180);
+  for (let c of cloudList) {
+    c.x += c.spd;
+    if (c.x > width + 50) c.x = -70;
+    rect(c.x, c.y, 60, 16);
+    rect(c.x + 10, c.y - 8, 40, 10);
   }
 
-  function createBurst(x, y) {
-    for (let i = 0; i < 15; i++) {
-      let angle = random(TWO_PI);
-      let speed = random(1.5, 4);
-      particles.push({
-        x: x,
-        y: y,
-        vx: cos(angle) * speed,
-        vy: sin(angle) * speed,
-        size: random(3, 6),
-        alpha: 255
-      });
-    }
-  }
-
-  function drawStarfield() {
+  if (mode === 'start') {
+    textAlign(CENTER, CENTER);
+    fill(255);
+    textSize(26);
+    text('MINECRAFT TELEPORT', width / 2, height / 2 - 20);
+    textSize(18);
     fill(200);
-    noStroke();
-    for (let s of stars) {
-      ellipse(s.x, s.y, s.size);
-    }
+    text('Click Anywhere to Play', width / 2, height / 2 + 25);
+    return;
   }
 
-  function drawMob(x, y, type) {
-    push();
-    translate(x, y);
-
-    const mobColors = {
-      ghost: '#E0E0E0',
-      pumpkin: '#FF7518',
-      witch: '#7B3F00',
-      monster: '#2E8B57',
-      zombie: '#4A7C59'
-    };
-
-    fill(mobColors[type] || '#FFFFFF');
-    rect(0, 0, 44, 44, 6);
-
-    fill(20);
-    rect(-10, -6, 8, 8);
-    rect(10, -6, 8, 8);
-    rect(0, 8, 12, 6);
-
-    pop();
-  }
-
-  function drawParticles() {
-    noStroke();
-    for (let p of particles) {
-      fill(180, 220, 255, p.alpha);
-      rect(p.x, p.y, p.size, p.size);
-    }
-  }
-
-  function drawStartScreen() {
+  if (mode === 'over') {
     textAlign(CENTER, CENTER);
     fill(255);
     textSize(24);
-    text('MINECRAFT TELEPORT', width / 2, height / 2 - 20);
-    
-    textSize(14);
-    fill(170);
-    text('Click anywhere to start', width / 2, height / 2 + 25);
-  }
-
-  function drawGameScreen() {
-    drawMob(mobPos.x, mobPos.y, currentMob);
-    drawParticles();
-
-    fill(255);
+    text('Game Over!', width / 2, height / 2 - 20);
+    text('Score: ' + points, width / 2, height / 2 + 15);
     textSize(16);
-    textAlign(LEFT, TOP);
-    text(`Score: ${score}`, 15, 15);
-
-    textAlign(RIGHT, TOP);
-    text(`Time: ${max(0, timeRemaining)}s`, width - 15, 15);
+    fill(180);
+    text('Click to Play Again', width / 2, height / 2 + 50);
+    return;
   }
 
-  function drawGameOverScreen() {
-    textAlign(CENTER, CENTER);
-    fill(255);
-    textSize(28);
-    text('Game Over!', width / 2, height / 2 - 25);
-    
-    textSize(18);
-    fill(200);
-    text(`Final Score: ${score}`, width / 2, height / 2 + 10);
-    
-    textSize(13);
-    fill(150);
-    text('Click to play again', width / 2, height / 2 + 55);
+  let passed = (millis() - gameStart) / 1000;
+  let remaining = max(0, totalTime - passed);
+
+  if (remaining <= 0) {
+    mode = 'over';
+    return;
   }
 
-  function mousePressed() {
-    if (gameState === 'START' || gameState === 'GAMEOVER') {
-      score = 0;
-      timeRemaining = GAME_DURATION;
-      mobInterval = 1000;
-      gameState = 'PLAYING';
-      spawnMob();
-      return;
+  if (frameCount % max(1, floor(waitFrames)) === 0) {
+    relocateMob();
+  }
+
+  drawMob(mobX, mobY, currentMob);
+  drawParticles();
+
+  fill(255);
+  textSize(16);
+  textAlign(LEFT, TOP);
+  text('Score: ' + points, 12, 12);
+
+  let mins = floor(remaining / 60);
+  let secs = floor(remaining % 60);
+  let timerText = mins + ':' + (secs < 10 ? '0' : '') + secs;
+
+  textAlign(RIGHT, TOP);
+  text('Time: ' + timerText, width - 12, 12);
+}
+
+function drawMob(x, y, kind) {
+  push();
+  rectMode(CENTER);
+  noStroke();
+
+  if (kind === 'ghost') {
+    fill(235);
+    rect(x, y, 48, 48, 4);
+    fill(40);
+    rect(x - 10, y - 4, 8, 10);
+    rect(x + 10, y - 4, 8, 10);
+    rect(x, y + 10, 10, 8);
+  } else if (kind === 'pumpkin') {
+    fill(225, 110, 15);
+    rect(x, y, 48, 48, 4);
+    fill(255, 200, 30);
+    triangle(x - 12, y - 8, x - 18, y, x - 6, y);
+    triangle(x + 12, y - 8, x + 6, y, x + 18, y);
+    rect(x, y + 10, 22, 6);
+  } else if (kind === 'witch') {
+    fill(190, 170, 140);
+    rect(x, y, 42, 42, 4);
+    fill(90, 150, 50);
+    rect(x, y + 5, 8, 12);
+    fill(35, 30, 45);
+    rect(x, y - 22, 56, 8);
+    rect(x, y - 34, 30, 18);
+  } else if (kind === 'monster') {
+    fill(40, 175, 50);
+    rect(x, y, 48, 48, 4);
+    fill(0);
+    rect(x - 10, y - 6, 8, 8);
+    rect(x + 10, y - 6, 8, 8);
+    rect(x, y + 4, 8, 12);
+    rect(x - 5, y + 8, 5, 10);
+    rect(x + 5, y + 8, 5, 10);
+  } else if (kind === 'zombie') {
+    fill(55, 125, 75);
+    rect(x, y, 48, 48, 4);
+    fill(20, 35, 20);
+    rect(x - 10, y - 5, 8, 8);
+    rect(x + 10, y - 5, 8, 8);
+    rect(x, y + 8, 14, 5);
+  }
+
+  pop();
+}
+
+function drawParticles() {
+  for (let i = fxList.length - 1; i >= 0; i--) {
+    let p = fxList[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.a -= 10;
+
+    noStroke();
+    fill(200, 240, 255, p.a);
+    rect(p.x, p.y, p.sz, p.sz);
+
+    if (p.a <= 0) {
+      fxList.splice(i, 1);
     }
+  }
+}
 
-    if (gameState === 'PLAYING') {
-      let d = dist(mouseX, mouseY, mobPos.x, mobPos.y);
-      if (d < mobRadius) {
-        if (popSound && popSound.isLoaded()) {
-          popSound.play();
-        }
-        score++;
-        
-        if (mobInterval > 300) {
-          mobInterval -= 25;
-        }
+function mousePressed() {
+  initAudio();
 
-        createBurst(mobPos.x, mobPos.y);
-        spawnMob();
-      }
+  if (mode === 'start' || mode === 'over') {
+    playBeep();
+    mode = 'play';
+    points = 0;
+    waitFrames = 60;
+    gameStart = millis();
+    relocateMob();
+  } else if (mode === 'play') {
+    if (dist(mouseX, mouseY, mobX, mobY) < 28) {
+      playHitSound();
+      points++;
+      if (waitFrames > 12) waitFrames -= 2.2;
+      addBurst(mobX, mobY);
+      pickNewMob();
+      relocateMob();
     }
   }
+}
 </script>
 
 </body>
-</html>
 </html>
